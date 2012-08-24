@@ -1,0 +1,117 @@
+<?php
+/**
+ * @file vc_onlywire.module
+ */
+
+/**
+ * Implements hook_permission().
+ */
+function vc_onlywire_permission() {
+  $permissions['administer onlywire.com'] = array(
+    'title' => t('Administer onlywire.com service'),
+    'description' => t('Configure onlywire.com service integration.'),
+  );
+
+  return $permissions;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function vc_onlywire_menu() {
+  $items['admin/config/services/onlywirecom'] = array(
+    'title' => 'Onlywire.com',
+    'access arguments' => array('administer onlywire.com'),
+    'file' => 'vc_onlywire.admin.inc',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('vc_onlywire_settings_form'),
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function vc_onlywire_node_insert($node) {
+  if (!$node->status) return;
+
+  vc_onlywire_node_bookmark($node);
+}
+
+/**
+ * @see vc_onlywire_node_insert().
+ */
+function vc_onlywire_node_bookmark($node) {
+  $node_types = variable_get('vc_onlywire_node_types', array());
+  if (!in_array($node->type, $node_types)) return;
+
+  $username = variable_get('vc_onlywire_username', '');
+  $password = variable_get('vc_onlywire_password', '');
+  if (!$username || !$password) {
+    $message = "Missing username/password";
+    watchdog('vc_onlywire', $message, array(), WATCHDOG_ERROR);
+    return;
+  }
+
+  $url = url("node/{$node->nid}", array('absolute' => TRUE));
+  $title = variable_get('vc_onlywire_'. $node->type .'_template_title', '[node:title]');
+  $title = token_replace($title, array('node' => $node));
+  $notes = variable_get('vc_onlywire_'. $node->type .'_template_notes', '[node:body]');
+  $notes = token_replace($notes, array('node' => $node));
+  $notes = strip_tags($notes);
+  $notes = truncate_utf8($notes, 100, TRUE, TRUE);
+  $category = variable_get('vc_onlywire_'. $node->type .'_template_category', '');
+  $category = token_replace($category, array('node' => $node));
+  $tags = variable_get('vc_onlywire_'. $node->type .'_template_tags', '');
+  $tags = token_replace($tags, array('node' => $node));
+  $private = variable_get('vc_onlywire_'. $node->type .'_template_private', FALSE);
+  $shortener = variable_get('vc_onlywire_'. $node->type .'_template_shortener', FALSE);
+  if ($scheduledtime = variable_get('vc_onlywire_'. $node->type .'_template_scheduledtime', FALSE)) {
+    // find interval value
+    $scheduledtime  = strtotime($scheduledtime);
+    $scheduledtime  = $scheduledtime - REQUEST_TIME;
+    // scheduledtime based on node created time
+    $scheduledtime += $node->created;
+    // if the schedule time is behind the current request time, just ignore it
+    if ($scheduledtime < REQUEST_TIME) {
+      $scheduledtime = FALSE;
+    }
+    else {
+      // the scheduled time is valid, convert it to standard format
+      $scheduledtime  = date('m/d/Y H.i e', $scheduledtime);
+    }
+  }
+  vc_onlywire_bookmark($username, $password, $url, $title, $shortener, $category, $notes, $tags, $private, $scheduledtime);
+}
+
+/**
+ * Bookmark the node.
+ *
+ * API Reference: http://www.onlywire.com/socialapi
+ */
+function vc_onlywire_bookmark($username, $password, $url, $title, $shortener, $category, $comments, $tags, $private, $scheduledtime) {
+  $params[] = 'url=' . urlencode($url);
+  foreach (array('title', 'category', 'comments', 'tags', 'scheduledtime') as $var) {
+    if (empty($$var)) continue;
+    $$var = strip_tags($$var);
+    $$var = trim($$var);
+    $$var = $var . '=' . urlencode($$var);
+    $params[] = $$var;
+  }
+
+  if ($shortener) $params[] = "shortener=1";
+  if ($private)   $params[] = "private=true";
+
+  $query = "https://www.onlywire.com/api/add?". implode('&', $params);
+
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, $query);
+  curl_setopt($ch, CURLOPT_USERPWD, $username.":".$password);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+  $output = curl_exec($ch);
+  curl_close ($ch);
+
+  $message = "Bookmark a node on Onlywire: !url.<br />Result: <pre>!result</pre>";
+  $options = array('!url' => $url, '!result' => $output);
+  watchdog('vc_onlywire', $message, $options);
+}

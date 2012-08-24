@@ -1,0 +1,20 @@
+<?php
+/**
+ * @file vc_onlywire.install
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function vc_onlywire_uninstall() {
+  variable_del('vc_onlywire_username');
+  variable_del('vc_onlywire_password');
+  variable_del('vc_onlywire_node_types');
+  variable_del('vc_onlywire_template_title');
+  variable_del('vc_onlywire_template_notes');
+  variable_del('vc_onlywire_template_category');
+  variable_del('vc_onlywire_template_tags');
+  variable_del('vc_onlywire_template_private');
+  variable_del('vc_onlywire_template_shortener');
+  variable_del('vc_onlywire_template_scheduledtime');
+}

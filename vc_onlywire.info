@@ -1,0 +1,6 @@
+name = "Onlywire"
+version = 7.x-1.0
+description = "Bookmark new node on Drupal site to Onlywire.com"
+core = 7.x
+configure = admin/config/services/onlywirecom
+dependencies[] = token
