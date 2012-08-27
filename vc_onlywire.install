@@ -21,3 +21,4 @@ function vc_onlywire_uninstall() {
     variable_del('vc_onlywire_'. $type .'_template_scheduledtime');
   }
 }
+
